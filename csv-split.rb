@@ -1,54 +1,50 @@
-require 'trollop'
-require 'fileutils'  #Added for file management
-require 'csv'	     
+require 'optimist'
+require 'fileutils' #Added for file management
+require 'csv'
 
-# I want to deeply thank https://github.com/imartingraham for providing this original work
-#
-# I had to do a legal production and used the base project and add features as needed.
-#
-# Key features are custom delimiter, spliting the files then removing columns that were needed. {in my case for redaction}
-#
-# I appologize for some of the slope structure but it should be straight forward and a good learning experience.
-#
-# Regards wb 0727/2017
-#
+# Special thanks for imartingraham for the original code (https://github.com/imartingraham/csv-split) and also to
+# ayoubmtd for their updates (https://github.com/ayoubmtd/csv-split).
+# This has been modified to clean up broken file split handling (if the file remainder is not the exact size of the file split, it gets dropped and not processed).
 
-opts = Trollop::options do
-  opt :file_path, "Path to csv file to be split", type: :string, default: nil
-  opt :new_file_name, "Name of the new files. This will be appended with an incremented number", type: :string, default: 'split' #Please note later i change the default name to {original_filename}-{inc#}.csv
-  opt :include_headers, "Include headers in new files", default: true, type: :boolean
-  opt :line_count, "Number of lines per file", default: 1, type: :integer #change default to 1
-  opt :delimiter, "Charcter used for Col. Sep.", default: ',', type: :string #Add custom delimiter
-  opt :remove_columns, "Specify column names to be removed during processing in remove_coluns.txt", default: false, type: :boolean #Add Remove Column processing with remove.csv
+p = Optimist::Parser.new do
+  version 'v1.0.0'
+  banner <<-EOS
+csv-split will split a csv file based on the parameters given, including removing columns and headers.
+options:
+  EOS
+  opt :file_path, 'Path to csv file to be split', type: :string, default: nil
+  opt :new_file_name, 'Name of the new files. This will be appended with an incremented number', type: :string, default: 'split'
+  opt :split_path_name, 'Folder to save the new files in', type: :string, default: 'converted-files'
+  opt :include_headers, 'Include headers in new files', type: :boolean, default: true
+  opt :line_count, 'Number of lines to output per file', type: :integer, default: 1
+  opt :delimiter, 'Column delimiter (separation character)', type: :string , default: ','
+  opt :remove_columns, 'Specify column names to be removed during processing in remove.csv', type: :boolean, default: false
 end
 
-#Remind users to provide ARGVs at command-line
-if opts[:file_path].nil?
-	print "Must provide Path & Filename for processing  {add} --{file-path path/to/csv/file}/{filename}.csv"
-	exit
+opts = Optimist::with_standard_exception_handling p do
+  raise Optimist::HelpNeeded if ARGV.empty?
+  p.parse ARGV
 end
 
-#Get path for processing
+# Get options for processing
 path_name = File.dirname(opts[:file_path])
+split_path_name = opts[:split_path_name]
 
-#Stop if remove_columns is enbabled but remove.csv is missing and/or broken
-if opts[:remove_columns] == true
-	#Stop if remove.csv missing or broken
-	unless File.exists?("#{path_name}/remove.csv")
-		puts "remove.csv is missing or mis-formatted. Please check remove-sample.csv for format"
-		exit
-	end
+# Stop if remove_columns is enabled but remove.csv is missing and/or broken
+if opts[:remove_columns]
+  # Stop if remove.csv missing or broken
+  unless File.exists?("#{path_name}/remove.csv")
+    puts 'remove.csv is missing or mis-formatted. Please check remove-sample.csv for format'
+    exit
+  end
 end
 
-#Disliked Converted file as directory name so changed defual to split-files
-split_path_name = "split-files"
-
-#Clean-up previous processing of file by deleting previously processes split-file directory
+# Clean-up previous processing of file by deleting previously processes split-file directory
 if File.exists?(split_path_name)
-	FileUtils.rm_r "#{path_name}/#{split_path_name}"
-	FileUtils::mkdir_p "#{path_name}/#{split_path_name}"
+  FileUtils.rm_r "#{path_name}/#{split_path_name}"
+  FileUtils::mkdir_p "#{path_name}/#{split_path_name}"
 else
-	FileUtils::mkdir_p "#{path_name}/#{split_path_name}"
+  FileUtils::mkdir_p "#{path_name}/#{split_path_name}"
 end
 
 
@@ -58,16 +54,16 @@ end
 #
 ######
 
-#Change default of split files to the original file name unless recieves input
+# Change default of split files to the original file name unless recieves input
 if opts[:new_file_name] == "split"
-	s = opts[:file_path]
-	s_name = s.split('/')[-1] #Get name of original CSV without path
-	split_name = s_name.split('.')[0]
+  s = opts[:file_path]
+  s_name = s.split('/')[-1] # Get name of original CSV without path
+  split_name = s_name.split('.')[0]
 else
-	s = opts[:new_file_name]
-	s_name = s.split('/')[-1] #Sanitizing incase user adds a path but overkill
-	split_name = s_name.split('.')[0]
-end 
+  s = opts[:new_file_name]
+  s_name = s.split('/')[-1] # Sanitizing incase user adds a path but overkill
+  split_name = s_name.split('.')[0]
+end
 
 
 
